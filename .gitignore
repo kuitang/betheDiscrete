@@ -1,0 +1,27 @@
+# Figures
+*.eps
+
+# Vim
+*.sw*
+
+# Mac OS X
+.DS_Store
+
+# Temp files
+*.log
+*.MPE
+*.MPE
+*.nfs*
+
+# MATLAB
+*~
+*.mex*
+*.o
+*.mat
+*.mex*
+
+# LaTeX
+*.pdf
+*.aux
+*.log
+*.bbl
