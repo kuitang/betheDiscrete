@@ -23,7 +23,7 @@ function [ A, B, varargout ] = BBPNew(theta, W, varargin)
     p = inputParser;    
     p.addRequired('theta');
     p.addRequired('W');
-    p.addParamValue('thresh', 0.002);
+    p.addParamValue('thresh', 1e-6);
     p.addParamValue('maxIter', Inf);
     p.addParamValue('A', sigmoid(theta - negW));
     p.addParamValue('B', 1 - sigmoid(theta + posW));            
@@ -45,13 +45,13 @@ function [ A, B, varargout ] = BBPNew(theta, W, varargin)
         oldA = A;
         oldB = B;
         
-        for i = 1:nNodes
+        for j = 1:nNodes
             % We can't vectorize this because a new update (j) may access
             % our updated variable.
-            L(i) = 1;
-            U(i) = 1;
+            L(j) = 1;
+            U(j) = 1;
             
-            for j = find(W(i,:))
+            for i = find(W(:,j))'
                 a = alpha(i,j);
                 if W(i,j) > 0
                     L(i) = L(i) * (1 + a*A(j) / (1 + a*(1 - B(i))*(1 - A(j))));
@@ -61,19 +61,17 @@ function [ A, B, varargout ] = BBPNew(theta, W, varargin)
                     U(i) = U(i) * (1 + a*A(j) / (1 + a*(1 - A(i))*(1 - A(j))));
                 end
             end
-        
-            % We can't vectorize this because a new update (j) may access
-            % our updated variable.
-            A(i) = 1 / (1 + exp(-theta(i) + negW(i)) / L(i));
-            B(i) = 1 / (1 + exp(theta(i)  + posW(i)) / U(i));            
+                    
+            A(j) = 1 / (1 + exp(-theta(j) + negW(j)) / L(j));
+            B(j) = 1 / (1 + exp(theta(j)  + posW(j)) / U(j));            
         end
                 
         % Lemma 9: At every iteration, each element of A, B
         % monotonically increase 
         %
         % NOTE: may fail due to fudge factor
-        assert(all(A >= oldA));
-        assert(all(B >= oldB));
+%         assert(all(A >= oldA));
+%         assert(all(B >= oldB));
         
         dA = abs(A - oldA);
         dB = abs(B - oldB);

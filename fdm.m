@@ -64,20 +64,9 @@ Wneg = -sum(W .* (W < 0), 2); % V_i in notes
 % than the ones we were given. We assume here that we won't improve A and B
 % since we assume something at least as good as BBP has already been run to
 % completion to produce the A and B which were input.
-if nargin<8
-    alpha = exp(abs(W)) - 1;
-    L=ones(n,1); U=ones(n,1);
-    for i=1:n
-        for j=1:n
-            if W(i,j) > 0
-                L(i) = L(i) * (1 + (alpha(i,j) * A(j)) / (1 + alpha(i,j) * (1-B(i)) * (1-A(j))));
-                U(i) = U(i) * (1 + (alpha(i,j) * B(j)) / (1 + alpha(i,j) * (1-A(i)) * (1-B(j))));
-            elseif W(i,j) < 0
-                L(i) = L(i) * (1 + (alpha(i,j) * B(j)) / (1 + alpha(i,j) * (1-B(i)) * (1-B(j))));
-                U(i) = U(i) * (1 + (alpha(i,j) * A(j)) / (1 + alpha(i,j) * (1-A(i)) * (1-A(j))));
-            end
-        end
-    end
+if nargin<8    
+    % Do one half iteration of BBP
+    [~, ~, alpha, L, U] = BBPNew(theta, W, 'A', A, 'B', B, 'maxIter', 1);    
 end
     
 % Constants for the bound functions; exclude \log \frac{q_i}{1 - q_i}
@@ -90,11 +79,17 @@ D    = max(abs(ll), abs(ur));
 
 S      = 1 - B - A; % gap sizes
 
+assert(all(S >= -10 * eps), 'fudge!');
+S(S < 0) = 0;
+
 % Now calculate the gamma mesh.
 if strcmp(method, 'simple')
     gams   = 2 * epsilon / n * (1./D);  % epsilon and n are scalars, D is a vector
 elseif strcmp(method, 'minsum')
     sqrtSoverD = sqrt(S ./ D); sumsqrtSD=sum(sqrt(S .* D));
+    
+    sqrtSoverD(S == 0) = 0;
+    
     gams   = 2 * epsilon * sqrtSoverD / sumsqrtSD;
 elseif strcmp(method(1:8), 'adaptive')
     % This uses the whole bag of tricks. So adaptive, integrate,
@@ -120,7 +115,9 @@ elseif strcmp(method(1:8), 'adaptive')
         gams{i}=[prevr]; % this is just to make it a vec, take it off at the end (unless A=1-B in which case leave it as is]
         if A(i)<1-B(i)
             while prevr<1-B(i)
-                [m,nextr]=adapt(prevr,Uconst,Lconst,keps(i),A(i),B(i));
+%                 [m,nextr]=adapt(prevr,Uconst,Lconst,keps(i),A(i),B(i));
+                [m,nextr]=adaptRobust(prevr,Uconst,Lconst,keps(i),A(i),B(i));
+
                 gams{i}=[gams{i} m];
                 prevr=nextr;
                 sumN=sumN+1; thisN(i)=thisN(i)+1;
@@ -132,7 +129,8 @@ elseif strcmp(method(1:8), 'adaptive')
 end
 
 if strcmp(method, 'simple') || strcmp(method, 'minsum') % calc N
-    frac=(1-B-A-gams)./gams;
+    frac=(S - gams) ./ gams;
+    frac(S == 0) = 0;
     thisN=round(frac+0.51)+1; % no. mesh points in each dimension
     sumN=sum(thisN);
 end

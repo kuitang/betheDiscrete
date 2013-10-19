@@ -14,39 +14,62 @@ function [gam, complexity] = bestMesh(theta, W, epsilon, verbose)
 %   grids in that variable; complexity is a structue with fields sumN,
 %   thisN, prodN.
 
+    fudge = 10 * eps;
+
     if nargin == 3
         verbose = false;
     end
         
     % Get the gams from somewhere...
-    %[A, B] = bpbound(theta, W);  
+    [Amk, Bmk] = MKNew(theta, W);      
+    Smk = 1 - Bmk - Amk;
+            
+    [Abp, Bbp] = BBPNew(theta, W);
+    Sbp = 1 - Bbp - Abp;
     
-    %[A, B] = BBPNew(theta, W);        
-    [A, B, alpha, L, U] = BBPNew(theta, W);
+    assert(all(Smk > -fudge), 'Smk was less than 0 (over fudge)!');
+    assert(all(Sbp > -fudge), 'Sbp was less than 0 (over fudge)!');
+    
+    % Set the flipped quantities to the upper bound.
+    mkFlip = Smk < 0;
+    Amk(mkFlip) = 1 - Bmk(mkFlip);
+    
+    bpFlip = Sbp < 0;
+    Abp(bpFlip) = 1 - Bbp(bpFlip);
+    
+    if sum(Sbp) < sum(Smk)
+        warning('Strangely, Sbp = %g < Smk = %g');
+        A = Abp; B = Bbp;        
+    else
+        A = Amk; B = Bmk;        
+    end
+    
+    N = length(A);
     
     %fmMethods = { 'simple', 'minsum', 'adaptivesimple', 'adaptiveminsum' };
     
     %fmMethods = { 'adaptiveminsum' };
-    fmMethods = { 'minsum' };
-    
-
-    
-    [gams, sumN, prodN, thisN] = cellfun(@(m) fdm(theta, W, A, B, epsilon, m, L, U), fmMethods, 'UniformOutput', false);
-    [~, i] = min(cell2mat(sumN));
-    %i = 4;
-    gam = gams{i};
-    complexity = struct('sumN', sumN{i}, 'thisN', thisN{i}, 'prodN', prodN{i});
+    fmMethods = { 'adaptiveminsum' };
         
-    if thisN{i} >= 1000
+    save TEMP_POST_BPBOUND_FOR_FDM_DEBUG
+    
+    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'adaptiveminsum');    
+    complexity = struct('sumN', sumN, 'thisN', thisN, 'prodN', prodN);
+    %[~, i] = min(cell2mat(sumN));
+    %i = 4;
+    gam = gams;
+    % Just make the grid
+%     gam = cell(N, 1);
+%     for n = 1:N
+%         lb = A(n);
+%         ub = 1 - B(n);
+%         gam{n} = [lb:gams(n):ub ub];
+%         assert(all(diff(gam{n}) <= gams(n) + 10*eps), 'Did not cover!');
+%     end
+        
+    if thisN >= 1000
         warning('Problem may have high complexity:');
         complexity
-    end
-    
-    if verbose
-        disp(['Methods: ' fmMethods]);
-        disp(['sumN: ' sumN]);
-        disp(['prodN: ' prodN]);
-        fprintf(1, 'Best method: %s, sumN = %d\n', fmMethods{i}, sumN{i});
     end        
 
 end
