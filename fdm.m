@@ -55,6 +55,9 @@ function [ gams,sumN,prodN,thisN ] = fdm(theta, W, A, B, epsilon, method, L, U)
 
 n = length(theta);
 
+% THIS IS A SILLY THING; WE WILL QUIT IF WE GO OVER
+MAX_POINTS = 1e6;
+
 Wpos =  sum(W .* (W > 0), 2); % W_i in notes
 Wneg = -sum(W .* (W < 0), 2); % V_i in notes
 
@@ -125,7 +128,12 @@ elseif strcmp(method(1:8), 'adaptive')
             gams{i}=gams{i}(2:end); % strips off the initial point which was needed to make sure it would work as a vec
             sumN=sumN-1; thisN(i)=thisN(i)-1;
         end
+        fprintf('fdm: node %d added %d points; sumN = %d so far\n', i, thisN(i), sumN);
+        if sumN > MAX_POINTS
+            error('sumN = %g > MAX_POINTS = %g; aborting\n', sumN, MAX_POINTS);
+        end
     end  
+
 end
 
 if strcmp(method, 'simple') || strcmp(method, 'minsum') % calc N
