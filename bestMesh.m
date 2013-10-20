@@ -52,21 +52,19 @@ function [gam, complexity] = bestMesh(theta, W, epsilon, verbose)
     B = Bmk;
     N = length(A);
         
-    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'adaptiveminsum');        
+    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'minsum');        
     
-    gam = cell(N, 1);
-    for n = 1:N
-        lb = A(n);
-        ub = 1 - B(n);
-        gam{n} = [lb:gams(n):ub ub];
-        assert(all(diff(gam{n}) <= gams(n) + 10*eps), 'Did not cover!');
-    end
+%    gam = cell(N, 1);
+%    for n = 1:N
+%        lb = A(n);
+%        ub = 1 - B(n);
+%        gam{n} = [lb:gams(n):ub ub];
+%        assert(all(diff(gam{n}) <= gams(n) + 10*eps), 'Did not cover!');
+%    end
+%
+    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'adaptiveminsum');  
 
-    %[gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'adaptiveminsum');  
-
-    %[~, i] = min(cell2mat(sumN));
-    %i = 4;
-    %gam = gams;
+    gam = gams;
     
     complexity = struct('sumN', sumN, 'thisN', thisN, 'prodN', prodN);        
     if sumN >= 1000
