@@ -35,7 +35,7 @@ end
 
 p = prevr;
 
-opts = struct('TolX', tol, 'TolFun', tol);
+% opts = struct('TolX', tol, 'TolFun', tol);
 
 if (1 - B - A) < tol
     warning('Interval size 1 - B - A is already smaller than fzero tolerance. Setting m = nextr = 1 - B.');
