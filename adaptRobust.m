@@ -37,9 +37,18 @@ p = prevr;
 
 opts = struct('TolX', tol, 'TolFun', tol);
 
-der   = @(t) log(t) - log1p(-t);
-ubInt = @(t) intp2m(Uconst, t, p) - keps;
-if ubInt(p) < 0 && ubInt(1 - B) < 0
+if (1 - B - A) < tol
+    warning('Interval size 1 - B - A is already smaller than fzero tolerance. Setting m = nextr = 1 - B.');
+    m = 1 - B;
+    nextr = m;
+    return;
+end
+
+%der   = @(t) log(t) - log1p(-t);
+
+%ubInt = @(t) intp2m(Uconst, t, p) - keps;
+if intNew(1 - B, Uconst, -keps, p) < 0
+%if ubInt(p) < 0 && ubInt(1 - B) < 0
     % Both endpoints of the feasible interval are negative, so fzero won't
     % find a root. But this means the next mesh point to be added goes over
     % the end (1 - B). So just add that endpoint and be done.
@@ -54,26 +63,39 @@ else
     % adaptive and fdm could be moved to a mexFile... ick, and the mesh
     % construction too.
     
-    m     = fzero(ubInt, [p 1-B], opts);
+%      m     = fzero(ubInt, [p 1-B], opts);
+%     m = fzero_fast([p 1-B], tol, Uconst, -keps, p);
+    m = fzero_fast(@intNew, [p 1-B], tol, Uconst, -keps, p);    
+%     mSlow = fzero(@intNew, [p 1-B], opts, Uconst, -keps, p);
+%     assert(m == mSlow);
+
     %m = steffensen(ubInt, p, tol);
     %m = newton(ubInt, der, p, tol);
     %m = bisection(ubInt, p, 1 - B, tol);    
 end
 
-lbInt = @(t) intp2m(Lconst, t, m) + keps;
-if lbInt(m) > 0 && lbInt(1 - B) > 0
+%lbInt = @(t) intp2m(Lconst, t, m) + keps;
+%if lbInt(m) > 0 && lbInt(1 - B) > 0
+if intNew(1 - B, Lconst, keps, m) > 0
     % Both endpoints of the feasible interval are negative, so fzero won't
     % find a root. But this means the mesh point m reaches over the end, so
     % we'll just set the reach to be exactly the end and be done.
     nextr = 1 - B;
 else
-    nextr = fzero(lbInt, [m 1 - B], opts);
+%     nextr = fzero(lbInt, [m 1 - B], opts);
+%     nextr = fzero_fast([m 1-B], tol, Lconst, keps, m);
+    nextr = fzero_fast(@intNew, [m 1-B], tol, Lconst, keps, m);
+    
+%     nextrSlow = fzero(@intNew, [m 1-B], opts, Lconst, keps, m);
+%     assert(nextr == nextrSlow);
+    
     %nextr = steffensen(lbInt, m, tol);
     %nextr = newton(lbInt, der, m, tol);
     %nextr = bisection(lbInt, m, 1 - B, tol);
 end
 
 %fprintf('adaptRobust prevr = %g, m = %g, nextr = %g\n', prevr, m, nextr);
+
 assert(m >= prevr && nextr >= m, 'integrals were not right');
 
 end

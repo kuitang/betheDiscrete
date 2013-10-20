@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <limits>
 #include "mex.h"
+#include "gsl_roots.h"
 
 double TEN_EPS = 2.2204e-15;
 void fixBounds(size_t nNodes, double *A, double *B) {
@@ -378,6 +379,155 @@ double getIntervalSz(size_t nNodes,
   return sqrt(2*epsilon / (nNodes * Omega * sqrt(density)));
 }
 
+
+
+cscMatrix adaptiveMinSumIntervals(size_t nNodes,
+                                  const double *theta,
+                                  const double *A,
+                                  const double *B,
+                                  double epsilon) {
+
+  // Compute a single (half) BBP iteration
+  double L[nNodes];
+  double U[nNodes];
+  for (size_t j = 0; j < nNodes; j++) {
+    L[j] = 1.0;
+    U[j] = 1.0;
+    for (int idx = W.jc[j]; idx < W.jc[j+1]; idx++) {
+      int i = W.ir[idx];
+      double a = alpha[idx];
+
+      if (W.pr[idx] > 0) {
+        L[j] = L[j] * (1 + a*A[i] / (1 + a*(1 - B[j])*(1 - A[i])));
+        U[j] = U[j] * (1 + a*B[i] / (1 + a*(1 - A[j])*(1 - B[i])));
+      } else {
+        L[j] = L[j] * (1 + a*B[i] / (1 + a*(1 - B[j])*(1 - B[i])));
+        U[j] = U[j] * (1 + a*A[i] / (1 + a*(1 - A[j])*(1 - A[i])));
+      }
+    }
+  }
+
+  // Compute negative/positive weights.
+  double posW[nNodes], negW[nNodes]
+  for (size_t j = 0; j < nNodes; j++) {
+    posW[j] = 0;
+    negW[j] = 0;
+
+    for (size_t idx = W.jc[j]; idx < W.jc[j+1]; idx++) {
+      double w = W.pr[idx];
+      if (w > 0) {
+        posW[j] += w;
+      } else {
+        negW[j] -= w;
+      }
+    }
+  }
+
+  double D[nNodes];
+  double lb[nNodes], ub[nNodes];
+  double ll, ur;
+
+  double sqrtSD[nNodes];
+  double sumSqrtSD = 0;
+  for (size_t n = 0; n < nNodes; n++) {
+    lb[n] = -theta[n] - Wpos[n] + log(U[n])
+    D[n]  = std::max(fabs(ll[n]), fabs(ur[n]));
+    S[n]  = 1 - B[n] - A[n];
+    if (S[n] < 0) { S[n] = 0; }
+
+    sqrtSD[n] = sqrt(S[n] * D[n]);
+    sumSqrtSD += sqrtSD[n];
+  }
+
+  double keps[nNodes];
+  for (size_t n = 0; n < nNodes; n++) {
+    keps[n] = epsilon / sumSqrtSD * sqrtSD[n];
+  }
+
+  // Now, actually do the adaptation!
+  double Uconst, Lconst, prevr;
+  // but, you _don't know_ totPoints in advance this time.
+  //
+  // refer to the MATLAB code for reference.
+
+  cscMatrix m;
+  //m.M = maxPoints;
+  m.N = nNodes;
+  //m.nzMax = totPoints;
+  //m.pr = new double[totPoints];
+  //m.ir = new size_t[totPoints];
+
+  m.jc = new size_t[m.N+1];
+  std::vector<double> pr;
+  std::vector<size_t> ir;
+
+  size_t currIdx = 0;
+
+  double m, prevr, nextr;
+  m.jc[0] = 0;
+  for (size_t n = 0; n < nNodes; n++) {
+    int nStates = 0;
+
+    if (A[n] < 1 - B[n]) {
+      while (prevr < 1 - B[n]) {
+        adaptNextPoint(prevr, ub[n], lb[n], keps[n], A[n], B[n], &m, &nextr);
+        prevr = nextr;
+
+        nStates++;
+        wVec.append(m);
+        ir.append(nStates);
+      }
+      mxAssert(wVec.size() == ir.size(), "wVec and ir had different sizes.");
+    } else {
+      // just put a point on A[n]
+      wVec.append(A[n]);
+      nStates = 1;
+      ir.append(0);
+    }
+
+    m.jc[n+1] = m.jc[n] + nStates; // cf. line after comment "Unaries"
+  }
+
+  m.nzMax = wVec.size();
+  m.pr = new double[m.nzMax];
+  m.ir = new size_t[m.nzMax];
+
+  std::copy(wVec.data(), wVec.data() + m.nzMax, m.pr);
+  std::copy(ir.data(), ir.data() + m.nzMax, m.ir);
+
+  return m;
+}
+
+struct integralParams {
+
+};
+
+inline double xlogx(double x) {
+  if (x == 0) { return 0; }
+  return log(x);
+}
+
+void boundIntegral(double upperLimit, void *params, double *f, double *df) {
+  *df = log(upperLimit) - log1p(-upperLimit);
+
+  integralParams *p = (integralParams *) params;
+  *f = p->Uconst * (upperLimit - p->lowerLimit) + xlogx(upperLimit) + xlogx(1 - upperLimit)
+       -xlogx(p->lowerLimit) - xlogx(1 - p->lowerLimit);
+}
+
+void adaptNextPoint(double prevr,
+                    const double *ub,
+                    const double *lb,
+                    const double *keps,
+                    const double *A,
+                    const double *B,
+                    double *m,
+                    double *nextr) {
+  double p = prevr;
+
+  //
+}
+
 void makeBetheMinSum(size_t nNodes,
                      const double *theta,
                      const cscMatrix &W,
@@ -388,7 +538,8 @@ void makeBetheMinSum(size_t nNodes,
                      MinSum &m) {
   mxAssert(m.nNodes == nNodes, "nNodes was a lie.");
 
-  cscMatrix intervals = calcIntervals(nNodes, A, B, intervalSz);
+  //cscMatrix intervals = calcIntervals(nNodes, A, B, intervalSz);
+  cscMatrix intervals = adaptiveMinSumIntervals(nNodes, A, B, epsilon);
 
   // Unaries: Term two of (Eq 4)
   for (size_t j = 0; j < nNodes; j++) {
@@ -401,7 +552,7 @@ void makeBetheMinSum(size_t nNodes,
     for (size_t k = 0; k < nStates; k++) {
       double q = intervals.pr[intervals.jc[j] + k];
       nj(k) = -theta[j] * q + degMinusOne * binaryEntropy(q);
-      //mexPrintf("%s:%d -- Node %d[%d] is %g\n", __FILE__, __LINE__, j, k, nj(k));
+      mexPrintf("%s:%d -- Node %d[%d] is %g\n", __FILE__, __LINE__, j, k, nj(k));
     }
   }
 
