@@ -21,9 +21,14 @@ function [gam, complexity] = bestMesh(theta, W, epsilon, verbose)
     end
         
     % Get the gams from somewhere...
-    [Amk, Bmk] = MKNew(theta, W);      
+%     [Amk, Bmk] = MKNew(theta, W);      
+
+        
+    [Amk, Bmk] = MKNew_mex(theta, sparse(W));
+%     fprintf('A 1-norm deviation from MK and MK MEX: %g\n', norm(Amk - Amex, 1));
+%     fprintf('B 1-norm deviation from MK and MK MEX: %g\n', norm(Bmk - Bmex, 1));   
     Smk = 1 - Bmk - Amk;
-            
+    
     [Abp, Bbp] = BBPNew(theta, W);
     Sbp = 1 - Bbp - Abp;
     
@@ -46,14 +51,11 @@ function [gam, complexity] = bestMesh(theta, W, epsilon, verbose)
     
     N = length(A);
     
-    %fmMethods = { 'simple', 'minsum', 'adaptivesimple', 'adaptiveminsum' };
-    
-    %fmMethods = { 'adaptiveminsum' };
-    fmMethods = { 'adaptiveminsum' };
+    %fmMethods = { 'simple', 'minsum', 'adaptivesimple', 'adaptiveminsum' };        
         
     save TEMP_POST_BPBOUND_FOR_FDM_DEBUG
     
-    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'adaptiveminsum');    
+    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'adaptivesimple');    
     complexity = struct('sumN', sumN, 'thisN', thisN, 'prodN', prodN);
     %[~, i] = min(cell2mat(sumN));
     %i = 4;

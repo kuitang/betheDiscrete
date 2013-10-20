@@ -377,4 +377,42 @@ namespace mexcpp {
 
   // NDArray: Need variadic!
 
+  // Compressed sparse column sparse matrix (MATLAB's format)
+  struct cscMatrix {
+    size_t N, M;
+    size_t nzMax;
+    double *pr;
+    size_t *ir, *jc;
+  };
+
+  inline int degree(const cscMatrix &W, int j) {
+    return W.jc[j+1] - W.jc[j];
+  }
+
+
+  // Compressed sparse column layout. (MATLAB's format)
+  //
+  // jc[j] is the linear index of the first nonzero element in column j and
+  // jc[j+1]-1 is the linear index of the last nonzero element in column j.
+  //
+  // ir[i] is the ROW of the node at linear index i.
+  inline cscMatrix extractCSC(const mxArray *M) {
+    if (!mxIsDouble(M) || !mxIsSparse(M)) {
+      mexErrMsgIdAndTxt("extractCSC:M", "matrix M must be double and sparse");
+    }
+
+    return { .N = mxGetN(M),
+             .M = mxGetM(M),
+             .nzMax = mxGetNzmax(M),
+             .pr = mxGetPr(M),
+             .ir = mxGetIr(M),
+             .jc = mxGetJc(M) };
+  }
+
+  inline void deleteCscMatrix(cscMatrix &M) {
+    delete[] M.pr;
+    delete[] M.ir;
+    delete[] M.jc;
+  }
+
 }

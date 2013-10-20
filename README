@@ -1,3 +1,5 @@
+Discrete 
+
 TODO: The first derivative mesh is not yet implemented in C++.
 If that is done, the whole interface can live inside C. As of now, bound propagation and mesh computation are computed in MATLAB.
 So long as N is not too huge, this should work fine.

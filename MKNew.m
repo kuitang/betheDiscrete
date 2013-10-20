@@ -6,7 +6,7 @@ function [A,B] = MKNew(theta, W, thresh)
 % Initialize bounds on cavity fields
 
 if nargin == 2
-    thresh = 1e-6;
+    thresh = 1e6;
 end
 
 N = length(theta);
@@ -29,6 +29,9 @@ nIter = 0;
 
 JT = transpose(J);
 
+etaLoNew = spones(W);
+etaHiNew = spones(W);
+
 while true        
     for ne = 1:nI
         i = iVec(ne);
@@ -38,14 +41,15 @@ while true
         etaHiNew(i,j) = eta(i);
         
         kidxs = full(JT(:,i) ~= 0);
+        kkidxs = full(J(:,i) ~= 0);
+        assert(all(kidxs == kkidxs));        
         kidxs(j) = 0;
         
-%         a = full(atanh(tanh(J(kidxs,i))) .* tanh(etaLo(kidxs,i)));
-%         b = full(atanh(tanh(J(kidxs,i))) .* tanh(etaHi(kidxs,i)));
+        a = atanh(tanh(J(kidxs,i)) .* tanh(etaLo(kidxs,i)));
+        b = atanh(tanh(J(kidxs,i)) .* tanh(etaHi(kidxs,i)));        
 
-        a = full(J(kidxs,i)) .* full(tanh(etaLo(kidxs,i)));
-        b = full(J(kidxs,i)) .* full(tanh(etaHi(kidxs,i)));
-
+%         fprintf('DEBUG: (i,j) = (%d,%d); kidxs = %s\n', i, j, num2str(find(kidxs)));
+        
         dLo = sum(min(a, b));
         dHi = sum(max(a, b));
         
@@ -62,8 +66,14 @@ while true
 %         end        
     end
     
+%     fprintf('etaLo, etaLoNew\n');
+%     [full(etaLo(:)) full(etaLoNew(:))]
+%     
+%     fprintf('etaHi, etaHiNew\n');
+%     [full(etaHi(:)) full(etaHiNew(:))]
+    
     % Yeah, this is slow, but it's the correct convergence criterion.
-    conv = sum(abs(etaLo - etaLoNew)) + sum(abs(etaHi - etaHiNew));
+    conv = sum(abs(etaLo - etaLoNew)) + sum(abs(etaHi - etaHiNew))
     if conv < thresh
         break;
     end
@@ -71,9 +81,12 @@ while true
     etaLo = etaLoNew;
     etaHi = etaHiNew;
     
-    fprintf(1, 'bpbound: iter %d, max(conv) = %g; thresh = %g\n', nIter, max(conv), thresh);
+    %fprintf(1, 'bpbound: iter %d, max(conv) = %g; thresh = %g\n', nIter, max(conv), thresh);
     nIter = nIter + 1;
 end
+
+% Intermedite check
+[nonzeros(etaLo) nonzeros(etaHi)]
 
 % Calculate beliefs in tanh parameterization
 betaLo = eta;
@@ -82,11 +95,15 @@ betaHi = eta;
 for ne = 1:nI
     i = iVec(ne);
     k = jVec(ne);
+    
     a = atanh(tanh(J(k,i)) * tanh(etaLo(k,i)));
     b = atanh(tanh(J(k,i)) * tanh(etaHi(k,i)));
+    
     betaLo(i) = betaLo(i) + min([a b]);
     betaHi(i) = betaHi(i) + max([a b]);      
 end
+
+[betaLo betaHi]
 
 % Calculate A,B bounds on pseudomarginal
 A = (tanh(betaLo) + 1) / 2;

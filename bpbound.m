@@ -6,7 +6,7 @@ function [A,B] = bpbound(theta, W, thresh)
 % Initialize bounds on cavity fields
 
 if nargin == 2
-    thresh = 1e-6;
+    thresh = 1e-2;
 end
 
 N = length(theta);
