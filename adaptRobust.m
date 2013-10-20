@@ -13,7 +13,7 @@ function [m, nextr] = adaptRobust(prevr, Uconst, Lconst, keps, A, B)
 if nargin<7; end % We'll find m,nextr s.t. integrals are in range [LOTWOL,1] * keps
 
 fudge = 1e-6;
-tol   = 1e-18;
+tol   = 1e-6;
 insurance = 1e-4;
 
 C=Uconst-Lconst;
@@ -37,6 +37,7 @@ p = prevr;
 
 opts = struct('TolX', tol, 'TolFun', tol);
 
+der   = @(t) log(t) - log1p(-t);
 ubInt = @(t) intp2m(Uconst, t, p) - keps;
 if ubInt(p) < 0 && ubInt(1 - B) < 0
     % Both endpoints of the feasible interval are negative, so fzero won't
@@ -46,7 +47,17 @@ if ubInt(p) < 0 && ubInt(1 - B) < 0
     nextr = 1 - B;
     return;
 else
+    % NOTE: Matlab's fzero dominates 'bisection', even though it does other
+    % junk.
+    %
+    % Evaluating the ubInt function is actually a bit expensive. The
+    % adaptive and fdm could be moved to a mexFile... ick, and the mesh
+    % construction too.
+    
     m     = fzero(ubInt, [p 1-B], opts);
+    %m = steffensen(ubInt, p, tol);
+    %m = newton(ubInt, der, p, tol);
+    %m = bisection(ubInt, p, 1 - B, tol);    
 end
 
 lbInt = @(t) intp2m(Lconst, t, m) + keps;
@@ -57,6 +68,9 @@ if lbInt(m) > 0 && lbInt(1 - B) > 0
     nextr = 1 - B;
 else
     nextr = fzero(lbInt, [m 1 - B], opts);
+    %nextr = steffensen(lbInt, m, tol);
+    %nextr = newton(lbInt, der, m, tol);
+    %nextr = bisection(lbInt, m, 1 - B, tol);
 end
 
 %fprintf('adaptRobust prevr = %g, m = %g, nextr = %g\n', prevr, m, nextr);

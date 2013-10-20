@@ -29,29 +29,30 @@ function [gam, complexity] = bestMesh(theta, W, epsilon, verbose)
 %     fprintf('B 1-norm deviation from MK and MK MEX: %g\n', norm(Bmk - Bmex, 1));   
     Smk = 1 - Bmk - Amk;
     
-    [Abp, Bbp] = BBPNew(theta, W);
-    Sbp = 1 - Bbp - Abp;
+%     [Abp, Bbp] = BBPNew(theta, W);
+%     Sbp = 1 - Bbp - Abp;
     
     assert(all(Smk > -fudge), 'Smk was less than 0 (over fudge)!');
-    assert(all(Sbp > -fudge), 'Sbp was less than 0 (over fudge)!');
+%     assert(all(Sbp > -fudge), 'Sbp was less than 0 (over fudge)!');
     
     % Set the flipped quantities to the upper bound.
     mkFlip = Smk < 0;
     Amk(mkFlip) = 1 - Bmk(mkFlip);
     
-    bpFlip = Sbp < 0;
-    Abp(bpFlip) = 1 - Bbp(bpFlip);
+%     bpFlip = Sbp < 0;
+%     Abp(bpFlip) = 1 - Bbp(bpFlip);
     
-    if sum(Sbp) < sum(Smk)
-        warning('Strangely, Sbp = %g < Smk = %g');
-        A = Abp; B = Bbp;        
-    else
-        A = Amk; B = Bmk;        
-    end
-    
+%     if sum(Sbp) < sum(Smk)
+%         warning('Strangely, Sbp = %g < Smk = %g');
+%         A = Abp; B = Bbp;        
+%     else
+%         A = Amk; B = Bmk;        
+%     end
+    A = Amk;
+    B = Bmk;
     N = length(A);
         
-    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'minsum');        
+    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'adaptiveminsum');        
     
     gam = cell(N, 1);
     for n = 1:N
