@@ -68,9 +68,8 @@ function [gam, complexity] = bestMesh(theta, W, epsilon, verbose)
     %gam = gams;
     
     complexity = struct('sumN', sumN, 'thisN', thisN, 'prodN', prodN);        
-    if thisN >= 1000
-        warning('Problem may have high complexity:');
-        complexity
+    if sumN >= 1000
+        warning('Problem may have high complexity: sumN = %d', sumN);
     end        
 
 end

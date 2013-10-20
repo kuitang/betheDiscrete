@@ -1,0 +1,21 @@
+all: MKNew_mex.mexa64 BetheGams_mex.mexa64 makePotential_mex.mexa64 makePotential_mex.mexa64 submodularMAP_mex.mexa64 submodularMAPFull_mex.mexa64
+
+MKNew_mex.mexa64: MKNew_mex.cpp
+	mex -largeArrayDims -O MKNew_mex.cpp -o MKNew_mex.mexa64
+
+submodularMAP_mex.mexa64: submodularMAP_mex.cpp
+	mex -largeArrayDims -g submodularMAP_mex.cpp graph.cpp maxflow.cpp -o submodularMAP_mex.mexa64
+
+submodularMAPFull_mex.mexa64: submodularMAPFull_mex.cpp
+	mex -largeArrayDims -g submodularMAPFull_mex.cpp graph.cpp maxflow.cpp -o submodularMAPFull_mex.mexa64
+
+
+BetheGams_mex.mexa64: BetheGams_mex.cpp
+	mex -largeArrayDims -O BetheGams_mex.cpp MinSum.cpp BetheApprox.cpp graph.cpp maxflow.cpp -o BetheGams_mex.mexa64
+
+makePotential_mex.mexa64: makePotential_mex.cpp
+	mex -largeArrayDims -O makePotential_mex.cpp -o makePotential_mex.mexa64
+
+clean:
+	rm *.o *.mexa64
+
