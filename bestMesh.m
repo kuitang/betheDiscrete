@@ -50,25 +50,24 @@ function [gam, complexity] = bestMesh(theta, W, epsilon, verbose)
     end
     
     N = length(A);
-    
-    %fmMethods = { 'simple', 'minsum', 'adaptivesimple', 'adaptiveminsum' };        
         
-    save TEMP_POST_BPBOUND_FOR_FDM_DEBUG
+    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'minsum');        
     
-    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'adaptivesimple');    
-    complexity = struct('sumN', sumN, 'thisN', thisN, 'prodN', prodN);
+    gam = cell(N, 1);
+    for n = 1:N
+        lb = A(n);
+        ub = 1 - B(n);
+        gam{n} = [lb:gams(n):ub ub];
+        assert(all(diff(gam{n}) <= gams(n) + 10*eps), 'Did not cover!');
+    end
+
+    %[gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'adaptiveminsum');  
+
     %[~, i] = min(cell2mat(sumN));
     %i = 4;
-    gam = gams;
-    % Just make the grid
-%     gam = cell(N, 1);
-%     for n = 1:N
-%         lb = A(n);
-%         ub = 1 - B(n);
-%         gam{n} = [lb:gams(n):ub ub];
-%         assert(all(diff(gam{n}) <= gams(n) + 10*eps), 'Did not cover!');
-%     end
-        
+    %gam = gams;
+    
+    complexity = struct('sumN', sumN, 'thisN', thisN, 'prodN', prodN);        
     if thisN >= 1000
         warning('Problem may have high complexity:');
         complexity
