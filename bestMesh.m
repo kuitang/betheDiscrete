@@ -1,75 +1,104 @@
-function [gam, complexity] = bestMesh(theta, W, epsilon, verbose)
-% [gams, complexity] = bestMesh(theta, W, epsilon)
+function [gam, cpx, epsilon] = bestMesh(theta, W, minPoints, maxPoints)
+% [gams, complexity, epsilon] = bestMesh(theta, W, minPoints, maxPoints)
 %
-%   NOTE: JUST USE ADAPTIVEMINSUM. For our regime (not "too" many nodes,
-%   this is the best anyways).
+%   Return the best mesh and corresponding epsilon (doubling and halving)
+%   to attain a mesh with size in [minPoints, maxPoints].
 %
-%   Try all our mesh methods (1st deriv, second deriv, Lagrangian, simple)
-%   and return the mesh grid for one with smallest total points.
-%
-%   theta is an N-vector, W is a weight matrix (symmetric), epsilon is the
-%   accuracy threshold.
-%
-%   gams is an N-cell array, each element is the ordered vector of mesh
-%   grids in that variable; complexity is a structue with fields sumN,
-%   thisN, prodN.
+%   This just uses adaptiveminsum.
 
-    fudge = 10 * eps;
-
-    if nargin == 3
-        verbose = false;
-    end
-        
-    % Get the gams from somewhere...
-%     [Amk, Bmk] = MKNew(theta, W);      
-
-        
-    [Amk, Bmk] = MKNew_mex(theta, sparse(W));
-%     fprintf('A 1-norm deviation from MK and MK MEX: %g\n', norm(Amk - Amex, 1));
-%     fprintf('B 1-norm deviation from MK and MK MEX: %g\n', norm(Bmk - Bmex, 1));   
-    Smk = 1 - Bmk - Amk;
+    global MESH_TOL MESH_MAX_POINTS MIN_EPS
+    MESH_TOL = 1e6;
+    MIN_EPS  = 1e-4;    
     
-%     [Abp, Bbp] = BBPNew(theta, W);
-%     Sbp = 1 - Bbp - Abp;
+    fudge = 1e-10;
     
-    assert(all(Smk > -fudge), 'Smk was less than 0 (over fudge)!');
-%     assert(all(Sbp > -fudge), 'Sbp was less than 0 (over fudge)!');
-    
-    % Set the flipped quantities to the upper bound.
-    mkFlip = Smk < 0;
-    Amk(mkFlip) = 1 - Bmk(mkFlip);
-    
-%     bpFlip = Sbp < 0;
-%     Abp(bpFlip) = 1 - Bbp(bpFlip);
-    
-%     if sum(Sbp) < sum(Smk)
-%         warning('Strangely, Sbp = %g < Smk = %g');
-%         A = Abp; B = Bbp;        
-%     else
-%         A = Amk; B = Bmk;        
-%     end
-    A = Amk;
-    B = Bmk;
+    assert(minPoints < maxPoints, 'minPoints is not less than maxPoints');
+            
+    [A, B] = MKNew_mex(theta, sparse(W));
+    % HACK: Remove zeros and 1s. Not really justified, but what the hell,
+    % we decided the model anyways.
+    A(A == 0) = eps;
+    A(A == 1) = 1 - eps;
+    B(B == 0) = eps;
+    B(B == 1 ) = eps;
+    S = 1 - B - A;
+    assert(all(S > -fudge), 'Smk was less than 0 (over fudge)!');
     N = length(A);
+    
+%     figure;
+%     hist(S);
+    
+    if maxPoints < N
+        warning('bestMesh:maxPoints', 'maxPoints < N, a contradiction. Setting maxPoints = N.');
+        maxPoints = N;
+    end
+    MESH_MAX_POINTS = maxPoints;
         
-    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'minsum');        
-    
-%    gam = cell(N, 1);
-%    for n = 1:N
-%        lb = A(n);
-%        ub = 1 - B(n);
-%        gam{n} = [lb:gams(n):ub ub];
-%        assert(all(diff(gam{n}) <= gams(n) + 10*eps), 'Did not cover!');
-%    end
-%
-    [gams, sumN, prodN, thisN] = fdm(theta, W, A, B, epsilon, 'adaptiveminsum');  
+    % Set the flipped quantities to the upper bound.
+    mkFlip = S < 0;
+    A(mkFlip) = 1 - B(mkFlip);
 
-    gam = gams;
     
-    complexity = struct('sumN', sumN, 'thisN', thisN, 'prodN', prodN);        
-    if sumN >= 1000
-        warning('Problem may have high complexity: sumN = %d', sumN);
-    end        
+    % Bisectio with infeasible start.
+    
+    hiLoRatio = 100;
+    loEps = 0.1;
+    hiEps = hiLoRatio * loEps;
+    
+    [loGam, loCpx] = fdm(theta, W, A, B, loEps, 'adaptiveminsum');
+    [hiGam, hiCpx] = fdm(theta, W, A, B, hiEps, 'adaptiveminsum');
+            
+    nBisects = 0;
+    while true
+        fprintf('nBisects = %d; loEps = %g; hiEps = %g\n', nBisects, loEps, hiEps);
+        if loEps <= MIN_EPS        
+            epsilon = loEps;
+            gam = loGam;
+            cpx = loCpx;
+            return;        
+        elseif loCpx.sumN < minPoints && hiCpx.sumN < minPoints % both too coarse; need lower epsilon.
+            % Switch the low to the high.
+            hiEps = loEps;
+            hiGam = loGam;
+            hiCpx = loCpx;
+            
+            loEps = loEps / hiLoRatio;
+            [loGam, loCpx] = fdm(theta, W, A, B, loEps, 'adaptiveminsum');
 
+        elseif isempty(loGam) && isempty(hiGam) % both too fine; need higher epsilon.
+            % Switch the high to the low.
+            loEps = hiEps;
+            loGam = hiGam;
+            loCpx = hiCpx;
+            
+            hiEps = hiLoRatio * hiEps;
+            [hiGam, hiCpx] = fdm(theta, W, A, B, hiEps, 'adaptiveminsum'); 
+        elseif hiCpx.sumN < minPoints && isempty(loGam) % hi is too coarse but lo is too fine.
+            % Halve the upswitch.
+            hiLoRatio = hiLoRatio / 2.0;
+                        
+            % Decrease hiEps from its current value, since we halved
+            % hiLoRatio.            
+            hiEps = hiLoRatio * loEps;
+            assert(loEps < hiEps, 'You messed up hi/lo.');
+            [hiGam, hiCpx] = fdm(theta, W, A, B, hiEps, 'adaptiveminsum');
+        elseif loCpx.sumN >= minPoints && loCpx.sumN <= maxPoints
+            % feasible!
+            epsilon = loEps;
+            gam = loGam;
+            cpx = loCpx;
+            return;
+        elseif hiCpx.sumN >= minPoints && hiCpx.sumN <= maxPoints
+            % feasible!
+            epsilon = hiEps;
+            gam = hiGam;
+            cpx = hiCpx;
+            return;
+        else
+            error('Unreachable!');
+        end     
+        
+        nBisects = nBisects + 1;
+    end
 end
 

@@ -1,4 +1,4 @@
-function [ gams,sumN,prodN,thisN ] = fdm(theta, W, A, B, epsilon, method, L, U)
+function [gams, complexity] = fdm(theta, W, A, B, epsilon, method, L, U)
 %[ gams,sumN,prodN,thisN ] = fdm(theta, W, A, B, epsilon, method, L, U)
 % First derivative mesh revised by AW.
 % gams has all the mesh points
@@ -56,7 +56,7 @@ function [ gams,sumN,prodN,thisN ] = fdm(theta, W, A, B, epsilon, method, L, U)
 n = length(theta);
 
 % THIS IS A SILLY THING; WE WILL QUIT IF WE GO OVER
-MAX_POINTS = 1e6;
+global MESH_MAX_POINTS
 
 Wpos =  sum(W .* (W > 0), 2); % W_i in notes
 Wneg = -sum(W .* (W < 0), 2); % V_i in notes
@@ -69,7 +69,7 @@ Wneg = -sum(W .* (W < 0), 2); % V_i in notes
 % completion to produce the A and B which were input.
 if nargin<8    
     % Do one half iteration of BBP
-    [~, ~, alpha, L, U] = BBPNew(theta, W, 'A', A, 'B', B, 'maxIter', 1);    
+    [~, ~, ~, L, U] = BBPNew(theta, W, 'A', A, 'B', B, 'maxIter', 1);    
 end
     
 % Constants for the bound functions; exclude \log \frac{q_i}{1 - q_i}
@@ -128,9 +128,11 @@ elseif strcmp(method(1:8), 'adaptive')
             gams{i}=gams{i}(2:end); % strips off the initial point which was needed to make sure it would work as a vec
             sumN=sumN-1; thisN(i)=thisN(i)-1;
         end
-        fprintf('fdm: node %d added %d points; sumN = %d so far\n', i, thisN(i), sumN);
-        if sumN > MAX_POINTS
-            error('sumN = %g > MAX_POINTS = %g; aborting\n', sumN, MAX_POINTS);
+        %fprintf('fdm: node %d added %d points; sumN = %d so far\n', i, thisN(i), sumN);
+        if sumN > MESH_MAX_POINTS
+            gams = [];
+            complexity = [];
+            return;
         end
     end  
 
@@ -143,6 +145,8 @@ if strcmp(method, 'simple') || strcmp(method, 'minsum') % calc N
     sumN=sum(thisN);
 end
 prodN=prod(thisN);   
+
+complexity = var2struct(sumN, prodN, thisN);
 
 end
 

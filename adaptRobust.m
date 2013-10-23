@@ -10,10 +10,12 @@ function [m, nextr] = adaptRobust(prevr, Uconst, Lconst, keps, A, B)
 
 % For now use loose upper bound, i.e. assume integral is max val * interval
 % No seems not much harder to try integral so we'll do that
-if nargin<7; end % We'll find m,nextr s.t. integrals are in range [LOTWOL,1] * keps
+% ^^ Great idea, Adrian!
+
+global MESH_TOL
 
 fudge = 1e-6;
-tol   = 1e-6;
+
 insurance = 1e-4;
 
 C=Uconst-Lconst;
@@ -35,10 +37,10 @@ end
 
 p = prevr;
 
-% opts = struct('TolX', tol, 'TolFun', tol);
+% opts = struct('TolX', MESH_TOL, 'TolFun', MESH_TOL);
 
-if (1 - B - A) < tol
-    warning('Interval size 1 - B - A is already smaller than fzero tolerance. Setting m = nextr = 1 - B.');
+if (1 - B - A) < MESH_TOL
+    %warning('Interval size 1 - B - A is already smaller than fzero tolerance. Setting m = nextr = 1 - B.');
     m = 1 - B;
     nextr = m;
     return;
@@ -64,14 +66,14 @@ else
     % construction too.
     
 %      m     = fzero(ubInt, [p 1-B], opts);
-%     m = fzero_fast([p 1-B], tol, Uconst, -keps, p);
-    m = fzero_fast(@intNew, [p 1-B], tol, Uconst, -keps, p);    
+%     m = fzero_fast([p 1-B], MESH_TOL, Uconst, -keps, p);
+    m = fzero_fast(@intNew, [p 1-B], MESH_TOL, Uconst, -keps, p);    
 %     mSlow = fzero(@intNew, [p 1-B], opts, Uconst, -keps, p);
 %     assert(m == mSlow);
 
-    %m = steffensen(ubInt, p, tol);
-    %m = newton(ubInt, der, p, tol);
-    %m = bisection(ubInt, p, 1 - B, tol);    
+    %m = steffensen(ubInt, p, MESH_TOL);
+    %m = newton(ubInt, der, p, MESH_TOL);
+    %m = bisection(ubInt, p, 1 - B, MESH_TOL);    
 end
 
 %lbInt = @(t) intp2m(Lconst, t, m) + keps;
@@ -83,20 +85,21 @@ if intNew(1 - B, Lconst, keps, m) > 0
     nextr = 1 - B;
 else
 %     nextr = fzero(lbInt, [m 1 - B], opts);
-%     nextr = fzero_fast([m 1-B], tol, Lconst, keps, m);
-    nextr = fzero_fast(@intNew, [m 1-B], tol, Lconst, keps, m);
+%     nextr = fzero_fast([m 1-B], MESH_TOL, Lconst, keps, m);
+    nextr = fzero_fast(@intNew, [m 1-B], MESH_TOL, Lconst, keps, m);
     
 %     nextrSlow = fzero(@intNew, [m 1-B], opts, Lconst, keps, m);
 %     assert(nextr == nextrSlow);
     
-    %nextr = steffensen(lbInt, m, tol);
-    %nextr = newton(lbInt, der, m, tol);
-    %nextr = bisection(lbInt, m, 1 - B, tol);
+    %nextr = steffensen(lbInt, m, MESH_TOL);
+    %nextr = newton(lbInt, der, m, MESH_TOL);
+    %nextr = bisection(lbInt, m, 1 - B, MESH_TOL);
 end
 
 %fprintf('adaptRobust prevr = %g, m = %g, nextr = %g\n', prevr, m, nextr);
 
 assert(m >= prevr && nextr >= m, 'integrals were not right');
+assert(nextr > prevr, 'No progress made!');
 
 end
 
