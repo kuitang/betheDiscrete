@@ -7,7 +7,7 @@ function [gam, cpx, epsilon] = bestMesh(theta, W, minPoints, maxPoints)
 %   This just uses adaptiveminsum.
 
     global MESH_TOL MESH_MAX_POINTS MIN_EPS
-    MESH_TOL = 1e6;
+    MESH_TOL = 1e-6;
     MIN_EPS  = 1e-4;    
     
     fudge = 1e-10;
@@ -42,7 +42,7 @@ function [gam, cpx, epsilon] = bestMesh(theta, W, minPoints, maxPoints)
     % Bisectio with infeasible start.
     
     hiLoRatio = 100;
-    loEps = 0.1;
+    loEps = 1.0;
     hiEps = hiLoRatio * loEps;
     
     [loGam, loCpx] = fdm(theta, W, A, B, loEps, 'adaptiveminsum');
@@ -50,21 +50,12 @@ function [gam, cpx, epsilon] = bestMesh(theta, W, minPoints, maxPoints)
             
     nBisects = 0;
     while true
-        fprintf('nBisects = %d; loEps = %g; hiEps = %g\n', nBisects, loEps, hiEps);
+        fprintf('bestMesh: nBisects = %d; loEps = %g; hiEps = %g\n', nBisects, loEps, hiEps);
         if loEps <= MIN_EPS        
             epsilon = loEps;
             gam = loGam;
             cpx = loCpx;
             return;        
-        elseif loCpx.sumN < minPoints && hiCpx.sumN < minPoints % both too coarse; need lower epsilon.
-            % Switch the low to the high.
-            hiEps = loEps;
-            hiGam = loGam;
-            hiCpx = loCpx;
-            
-            loEps = loEps / hiLoRatio;
-            [loGam, loCpx] = fdm(theta, W, A, B, loEps, 'adaptiveminsum');
-
         elseif isempty(loGam) && isempty(hiGam) % both too fine; need higher epsilon.
             % Switch the high to the low.
             loEps = hiEps;
@@ -73,7 +64,17 @@ function [gam, cpx, epsilon] = bestMesh(theta, W, minPoints, maxPoints)
             
             hiEps = hiLoRatio * hiEps;
             [hiGam, hiCpx] = fdm(theta, W, A, B, hiEps, 'adaptiveminsum'); 
-        elseif hiCpx.sumN < minPoints && isempty(loGam) % hi is too coarse but lo is too fine.
+
+        elseif ~isempty(loCpx) && loCpx.sumN < minPoints && hiCpx.sumN < minPoints % both too coarse; need lower epsilon.
+            % Switch the low to the high.
+            hiEps = loEps;
+            hiGam = loGam;
+            hiCpx = loCpx;
+            
+            loEps = loEps / hiLoRatio;
+            [loGam, loCpx] = fdm(theta, W, A, B, loEps, 'adaptiveminsum');
+
+        elseif ~isempty(hiCpx) && hiCpx.sumN < minPoints && isempty(loGam) % hi is too coarse but lo is too fine.
             % Halve the upswitch.
             hiLoRatio = hiLoRatio / 2.0;
                         
@@ -82,13 +83,14 @@ function [gam, cpx, epsilon] = bestMesh(theta, W, minPoints, maxPoints)
             hiEps = hiLoRatio * loEps;
             assert(loEps < hiEps, 'You messed up hi/lo.');
             [hiGam, hiCpx] = fdm(theta, W, A, B, hiEps, 'adaptiveminsum');
-        elseif loCpx.sumN >= minPoints && loCpx.sumN <= maxPoints
+            
+        elseif ~isempty(loCpx) && loCpx.sumN >= minPoints && loCpx.sumN <= maxPoints
             % feasible!
             epsilon = loEps;
             gam = loGam;
             cpx = loCpx;
             return;
-        elseif hiCpx.sumN >= minPoints && hiCpx.sumN <= maxPoints
+        elseif ~isempty(hiCpx) && hiCpx.sumN >= minPoints && hiCpx.sumN <= maxPoints
             % feasible!
             epsilon = hiEps;
             gam = hiGam;
@@ -100,5 +102,6 @@ function [gam, cpx, epsilon] = bestMesh(theta, W, minPoints, maxPoints)
         
         nBisects = nBisects + 1;
     end
+    fprintf('bestMesh: returned epsilon = %d\n', epsilon);
 end
 

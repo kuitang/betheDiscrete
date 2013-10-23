@@ -89,8 +89,8 @@ S(S < 0) = 0;
 if strcmp(method, 'simple')
     gams   = 2 * epsilon / n * (1./D);  % epsilon and n are scalars, D is a vector
 elseif strcmp(method, 'minsum')
-    sqrtSoverD = sqrt(S ./ D); sumsqrtSD=sum(sqrt(S .* D));
-    
+    sqrtSoverD = sqrt(S ./ D);
+    sumsqrtSD=sum(sqrt(S .* D));    
     sqrtSoverD(S == 0) = 0;
     
     gams   = 2 * epsilon * sqrtSoverD / sumsqrtSD;
@@ -106,36 +106,60 @@ elseif strcmp(method(1:8), 'adaptive')
     if strcmp(method(9:end), 'simple')
         k = 1/n * ones(n,1); keps = k*epsilon; % we'll make the max delta F_i = k epsilon 
     elseif strcmp(method(9:end), 'minsum')
-        sqrtSD=sqrt(S .* D); sumsqrtSD=sum(sqrtSD); keps=epsilon/sumsqrtSD *sqrtSD; 
+        sqrtSD=sqrt(S .* D);
+        sumsqrtSD=sum(sqrtSD);
+        keps = epsilon / sumsqrtSD * sqrtSD; 
+        
+        % KT: More robustness changes
+        sqrtSoverD = sqrt(S ./ D);        
+
+        % We use this value in case we don't make progress.
+        safetyGams = 2 * epsilon * sqrtSoverD / sumsqrtSD;
+        frac = (S - safetyGams) ./ safetyGams;
+        frac(S == 0) = 0;
+        safetyThisN = round(frac+0.51)+1; % no. mesh points in each dimension
+        safetySumN  = sum(safetyThisN);        
+        fprintf('fdm: safetySumN = %d\n', safetySumN);
     else
         fprintf('adaptive but what type?\n'); beep; return
     end
-    gams = cell(n,1); sumN=n; % N is total no. of mesh points in all dims
+    gams = cell(n,1);
+    sumN=n; % N is total no. of mesh points in all dims
     thisN=ones(n,1);
+    
     for i=1:n
         %fprintf('Starting computation of mesh points gams{i} for i=%d\n',i);
         Uconst=ub(i); Lconst=lb(i); prevr=A(i);
         gams{i}=[prevr]; % this is just to make it a vec, take it off at the end (unless A=1-B in which case leave it as is]
         if A(i)<1-B(i)
+            assert(S(i) ~= 0 && safetyGams(i) ~= 0, 'Math fail. Because computers dont have real numbers.');
             while prevr<1-B(i)
 %                 [m,nextr]=adapt(prevr,Uconst,Lconst,keps(i),A(i),B(i));
                 [m,nextr]=adaptRobust(prevr,Uconst,Lconst,keps(i),A(i),B(i));
+                
+                if nextr == prevr
+                    % We didn't make progress. Move by gams.
+                    m = prevr + safetyGams(i);
+                    nextr = m;
+                end
 
                 gams{i}=[gams{i} m];
                 prevr=nextr;
                 sumN=sumN+1; thisN(i)=thisN(i)+1;
+                
             end
             gams{i}=gams{i}(2:end); % strips off the initial point which was needed to make sure it would work as a vec
             sumN=sumN-1; thisN(i)=thisN(i)-1;
         end
         %fprintf('fdm: node %d added %d points; sumN = %d so far\n', i, thisN(i), sumN);
         if sumN > MESH_MAX_POINTS
+            fprintf('fdm: exceeded MESH_MAX_POINTS = %d\n', MESH_MAX_POINTS);
             gams = [];
             complexity = [];
             return;
         end
     end  
-
+    fprintf('fdm: sumN = %d (safetySumN = %d)\n', sumN, safetySumN);               
 end
 
 if strcmp(method, 'simple') || strcmp(method, 'minsum') % calc N

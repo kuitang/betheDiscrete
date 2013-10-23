@@ -99,7 +99,7 @@ end
 %fprintf('adaptRobust prevr = %g, m = %g, nextr = %g\n', prevr, m, nextr);
 
 assert(m >= prevr && nextr >= m, 'integrals were not right');
-assert(nextr > prevr, 'No progress made!');
+%assert(nextr > prevr, 'No progress made!');
 
 end
 
