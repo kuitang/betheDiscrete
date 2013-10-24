@@ -18,6 +18,13 @@ fudge = 1e-6;
 
 insurance = 1e-4;
 
+if (1 - B - A) < MESH_TOL
+    %warning('Interval size 1 - B - A is already smaller than fzero tolerance. Setting m = nextr = 1 - B.');
+    m = 1 - B;
+    nextr = m;
+    return;
+end
+
 C=Uconst-Lconst;
 if C<0
     error('Error: Upper bound constant < Lower bound constant\n');    
@@ -39,12 +46,6 @@ p = prevr;
 
 % opts = struct('TolX', MESH_TOL, 'TolFun', MESH_TOL);
 
-if (1 - B - A) < MESH_TOL
-    %warning('Interval size 1 - B - A is already smaller than fzero tolerance. Setting m = nextr = 1 - B.');
-    m = 1 - B;
-    nextr = m;
-    return;
-end
 
 %der   = @(t) log(t) - log1p(-t);
 
