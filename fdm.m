@@ -134,8 +134,15 @@ elseif strcmp(method(1:8), 'adaptive')
         if A(i)<1-B(i)
             assert(S(i) ~= 0 && safetyGams(i) ~= 0, 'Math fail. Because computers dont have real numbers.');
             while prevr<1-B(i)
-%                 [m,nextr]=adapt(prevr,Uconst,Lconst,keps(i),A(i),B(i));
-                [m,nextr]=adaptRobust(prevr,Uconst,Lconst,keps(i),A(i),B(i));
+                % If we get a numeric error, revert to safetyGamma.
+                try
+                    [m,nextr]=adaptRobust(prevr,Uconst,Lconst,keps(i),A(i),B(i));
+                catch err
+                    disp(err)
+                    % Use the safety gamma
+                    m = prevr + safetyGams(i);
+                    nextr = m;
+                end
                 
                 if nextr == prevr
                     % We didn't make progress. Move by gams.
